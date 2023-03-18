@@ -1,0 +1,25 @@
+[package]
+name = "gen4-smogon-tracker"
+version = "0.1.0"
+edition = "2021"
+description = "Gen 4 Smogon Set Tracker"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+smog_strat_dex_rs = {git = "https://github.com/SteveCookTU/smog_strat_dex_rs.git", rev = '6fa8cbc'}
+rusqlite = {version = "0.28.0", features = ['bundled'] }
+tokio = {version = "1.26.0", features = ['full']}
+futures = "0.3.26"
+dioxus = "0.3.2"
+dioxus-desktop = "0.3.0"
+dioxus-router = "0.3.0"
+rand = "0.8.5"
+image = "0.24.5"
+
+[build-dependencies]
+winres = "0.1.12"
+
+[package.metadata.winres]
+FileDescription = "Gen 4 Smogon Set Tracker"
+LegalCopyright = "SteveCookTU @ 2021"
