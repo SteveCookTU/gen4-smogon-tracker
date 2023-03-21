@@ -3058,7 +3058,7 @@ checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 [[package]]
 name = "smog_strat_dex_rs"
 version = "0.1.0"
-source = "git+https://github.com/SteveCookTU/smog_strat_dex_rs.git?rev=6fa8cbc#6fa8cbc3f48217681a00f4455196689536691db9"
+source = "git+https://github.com/SteveCookTU/smog_strat_dex_rs.git?rev=73a2e5b#73a2e5b354dc30ff8b0a940a22541868946181e8"
 dependencies = [
  "reqwest",
  "serde",

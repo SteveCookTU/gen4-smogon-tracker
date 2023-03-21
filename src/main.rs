@@ -5,18 +5,19 @@ use dioxus::prelude::*;
 use dioxus_desktop::tao::window::Icon;
 use dioxus_desktop::{Config, LogicalSize, WindowBuilder};
 use dioxus_router::{Route, Router};
-use gen4_smogon_tracker::pages::{home::Home, pkm::Pkm, summary_view::SummaryView};
-use gen4_smogon_tracker::{initialize_db, Format};
+use gen4_smogon_tracker::initialize_db;
+use gen4_smogon_tracker::pages::{
+    formats::Formats, home::Home, pkm::Pkm, summary_view::SummaryView,
+};
 
 static ICON: &[u8] = include_bytes!("../icon.ico");
 
-#[tokio::main]
-async fn main() {
+fn main() {
     dioxus_desktop::launch_cfg(
         app,
         Config::new().with_window(
             WindowBuilder::new()
-                .with_title("Gen4 Smogon Tracker")
+                .with_title("Smogon Set Tracker")
                 .with_window_icon(Some(load_icon()))
                 .with_resizable(false)
                 .with_inner_size(LogicalSize::new(1280.0, 720.0)),
@@ -46,14 +47,8 @@ fn app(cx: Scope) -> Element {
             class: "bg-slate-400",
                 Router {
                 Route { to: "/", Home {} }
-                Route { to: "/ou", SummaryView { format: Format::OU } }
-                Route { to: "/uber", SummaryView { format: Format::Uber } }
-                Route { to: "/uu", SummaryView { format: Format::UU } }
-                Route { to: "/nu", SummaryView { format: Format::NU } }
-                Route { to: "/nubl", SummaryView { format: Format::NUBL } }
-                Route { to: "/uubl", SummaryView { format: Format::UUBL } }
-                Route { to: "/lc", SummaryView { format: Format::LC } }
-                Route { to: "/nfe", SummaryView { format: Format::NFE } }
+                Route { to: "/formats", Formats { } }
+                Route { to: "/summary", SummaryView {} }
                 Route { to: "/pkm/:id", Pkm { } }
             }
         }
