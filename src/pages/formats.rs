@@ -1,5 +1,8 @@
 use crate::components::BackButton;
-use crate::{get_formats, initialize_db, initialize_db_data, table_exists, InitializationMessage};
+use crate::{
+    get_formats, initialize_db, initialize_db_data, table_exists, update_db_data,
+    InitializationMessage,
+};
 use dioxus::prelude::*;
 use dioxus_router::{use_route, Link};
 use futures::StreamExt;
@@ -14,7 +17,7 @@ pub fn Formats(cx: Scope) -> Element {
 
     let loaded = use_state(cx, || table_exists(&initialize_db(), gen));
     let formats = use_ref(cx, || {
-        if *loaded.get() == true {
+        if *loaded.get() {
             get_formats(&initialize_db(), gen)
         } else {
             Vec::new()
@@ -32,21 +35,20 @@ pub fn Formats(cx: Scope) -> Element {
         let formats = formats.to_owned();
         let initializing = initializing.to_owned();
         async move {
-            if !loaded.get() {
-                while let Some(msg) = rx.next().await {
-                    match msg {
-                        InitializationMessage::Total(i) => {
-                            total.set(i);
-                        }
-                        InitializationMessage::Progress => {
-                            progress.modify(|i| i + 1);
-                        }
-                        _ => break,
+            while let Some(msg) = rx.next().await {
+                match msg {
+                    InitializationMessage::Total(i) => {
+                        total.set(i);
+                    }
+                    InitializationMessage::Progress => {
+                        progress.modify(|i| i + 1);
+                    }
+                    _ => {
+                        *formats.write() = get_formats(&initialize_db(), gen);
+                        loaded.set(true);
+                        initializing.set(false);
                     }
                 }
-                *formats.write() = get_formats(&initialize_db(), gen);
-                loaded.set(true);
-                initializing.set(false);
             }
         }
     });
@@ -59,7 +61,7 @@ pub fn Formats(cx: Scope) -> Element {
             async move {
                 if !*initializing.get() {
                     initializing.set(true);
-                    let _ = tokio::spawn(async move {
+                    tokio::spawn(async move {
                         initialize_db_data(conn, gen, tx).await;
                     });
                 }
@@ -67,51 +69,82 @@ pub fn Formats(cx: Scope) -> Element {
         });
     };
 
-    cx.render(rsx! {
-        div {
-            class: "flex flex-col flex-wrap h-screen justify-center content-center text-center",
-            if !initializing {
-                rsx! {
-                    BackButton {path: "/"}
+    let update = move |_| {
+        cx.spawn({
+            let loaded = loaded.to_owned();
+            let initializing = initializing.to_owned();
+            let tx = test.to_owned();
+            let conn = initialize_db();
+            async move {
+                loaded.set(false);
+                if !*initializing.get() {
+                    initializing.set(true);
+                    tokio::spawn(async move {
+                        update_db_data(conn, gen, tx).await;
+                    });
                 }
             }
-            if !loaded {
-                rsx! {
-                    if !initializing {
-                        Some(rsx! {
-                            button {
-                                class: "bg-blue-500 py-16 px-32 rounded-lg shadow-lg transition duration-300 hover:cursor-pointer hover:bg-blue-300",
-                                onclick: initialize,
-                                "Initialize"
-                            }
-                        })
-                    } else if *total.get() != 0 {
-                        Some(rsx! {
-                            p {
-                                class: "py-4",
-                                "Indexing Strategy Dex: {progress.get()} / {total.get()}"
-                            }
-                        })
-                    } else {
-                        None
-                    }
-                }
-            } else {
-                rsx! {
-                    div {
-                        class: "grid grid-cols-3 gap-4",
-                        formats.read().iter().map(|f| {
+        })
+    };
+
+    cx.render(rsx! {
+        div {
+            class: "min-h-screen",
+            div {
+                class: "flex flex-col flex-wrap py-4 content-center text-center",
+                if !initializing {
+                    rsx! {
+                        BackButton {path: "/"},
+                        if **loaded {
                             rsx! {
-                                Link {
-                                    to: "/summary?gen={gen_str}&format={f}",
-                                    class: "bg-blue-500 py-16 px-32 rounded-lg shadow-lg transition duration-300 hover:cursor-pointer hover:bg-blue-300",
-                                    "{f}"
+                                button {
+                                    class: "absolute py-4 px-6 right-4 top-4 text-center bg-red-300 rounded-lg shadow-md transition duration-300 hover:cursor-pointer hover:bg-red-100",
+                                    onclick: update,
+                                    "Update"
                                 }
                             }
-                        }),
+                        }
+
                     }
                 }
-            },
+                if !loaded {
+                    rsx! {
+                        if !initializing {
+                            Some(rsx! {
+                                button {
+                                    class: "bg-blue-500 py-16 px-32 rounded-lg shadow-lg transition duration-300 hover:cursor-pointer hover:bg-blue-300",
+                                    onclick: initialize,
+                                    "Initialize"
+                                }
+                            })
+                        } else if *total.get() != 0 {
+                            Some(rsx! {
+                                p {
+                                    class: "py-4",
+                                    "Indexing Strategy Dex: {progress.get()} / {total.get()}"
+                                }
+                            })
+                        } else {
+                            None
+                        }
+                    }
+                } else {
+                    rsx! {
+                        div {
+                            class: "grid grid-cols-3 gap-4",
+                            formats.read().iter().map(|f| {
+                                rsx! {
+                                    Link {
+                                        to: "/summary?gen={gen_str}&format={f}",
+                                        class: "bg-blue-500 py-16 px-32 rounded-lg shadow-lg transition duration-300 hover:cursor-pointer hover:bg-blue-300",
+                                        "{f}"
+                                    }
+                                }
+                            }),
+                        }
+                    }
+                },
+            }
         }
     })
 }

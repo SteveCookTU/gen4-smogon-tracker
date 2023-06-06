@@ -31,7 +31,7 @@ pub fn Pkm(cx: Scope) -> Element {
             .read()
             .pokemon
             .replace(' ', "-")
-            .replace('.', "")
+            .replace(['.', '\''], "")
             .replace('\'', "")
             .to_lowercase()
     );
@@ -77,7 +77,9 @@ pub fn Pkm(cx: Scope) -> Element {
                         br {}
                         "{pokemon}",
                         if !item.is_empty() {
-                            " @ {item}"
+                            rsx! {
+                                " @ {item}"
+                            }
                         },
                         if !ability.is_empty() {
                             rsx! {

@@ -81,7 +81,7 @@ pub async fn initialize_db_data(
         })
         .collect::<Vec<_>>();
 
-    let _ = sender.send(InitializationMessage::Total(pokemon.len()));
+    sender.send(InitializationMessage::Total(pokemon.len()));
 
     for chunk in pokemon.chunks(5) {
         'inner: for (pokemon, main_format) in chunk {
@@ -90,8 +90,7 @@ pub async fn initialize_db_data(
                 pokemon
                     .to_lowercase()
                     .replace(' ', "-")
-                    .replace('\'', "")
-                    .replace('.', ""),
+                    .replace(['.', '\''], ""),
             )
             .await
             {
@@ -104,7 +103,7 @@ pub async fn initialize_db_data(
                     Format::from(a.format.as_str()).cmp(&Format::from(b.format.as_str()))
                 });
                 if strategies.is_empty() {
-                    let _ = sender.send(InitializationMessage::Progress);
+                    sender.send(InitializationMessage::Progress);
                     continue 'inner;
                 }
                 let strat = strategies.last().unwrap();
@@ -163,11 +162,174 @@ pub async fn initialize_db_data(
                     .first()
                     .map(|s| s.to_string())
                     .unwrap_or_default();
-                if let Err(_) = conn.execute(&format!("INSERT INTO {tbl} (pokemon, main_format, set_format, set_name, item, ability, nature, evs, ivs, moves, tera_type)
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)"), (pokemon, main_format, set_format, set_name, item, ability, nature, evs, ivs, moves, tera_type)) {
+                if conn.execute(&format!("INSERT INTO {tbl} (pokemon, main_format, set_format, set_name, item, ability, nature, evs, ivs, moves, tera_type)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)"), (pokemon, main_format, set_format, set_name, item, ability, nature, evs, ivs, moves, tera_type)).is_err() {
+                    println!("Error: {pokemon}");
                 }
             }
-            let _ = sender.send(InitializationMessage::Progress);
+            sender.send(InitializationMessage::Progress);
+        }
+        thread::sleep(Duration::from_secs(2));
+    }
+
+    sender.send(InitializationMessage::End);
+}
+
+pub async fn update_db_data(
+    conn: Connection,
+    gen: Generation,
+    sender: Coroutine<InitializationMessage>,
+) {
+    let tbl = get_table_name(gen);
+
+    let basics = Client::get_basics(gen).await.expect("Failed to get basics");
+    let pokemon = basics
+        .pokemon
+        .into_iter()
+        .filter_map(|bp| {
+            if !bp.formats.is_empty() && bp.is_non_standard.as_str() == "Standard" {
+                Some((bp.name, bp.formats.into_iter().next().unwrap()))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    sender.send(InitializationMessage::Total(pokemon.len()));
+
+    for chunk in pokemon.chunks(5) {
+        'inner: for (pokemon, main_format) in chunk {
+            if let Ok(pokemon_dump) = Client::get_pokemon(
+                gen,
+                pokemon
+                    .to_lowercase()
+                    .replace(' ', "-")
+                    .replace(['.', '\''], ""),
+            )
+            .await
+            {
+                let mut strategies = pokemon_dump
+                    .strategies
+                    .into_iter()
+                    .filter(|s| ["OU", "UU", "NU", "RU", "PU", "Uber"].contains(&s.format.as_str()))
+                    .collect::<Vec<_>>();
+                strategies.sort_by(|a, b| {
+                    Format::from(a.format.as_str()).cmp(&Format::from(b.format.as_str()))
+                });
+                if strategies.is_empty() {
+                    sender.send(InitializationMessage::Progress);
+                    continue 'inner;
+                }
+
+                let strat = strategies.last().unwrap();
+                let set_format = &strat.format;
+
+                let move_set = strat.move_sets.first().unwrap();
+
+                let set_name = &move_set.name;
+                let item = move_set
+                    .items
+                    .first()
+                    .map(|s| s.to_string())
+                    .unwrap_or_default();
+                let ability = move_set
+                    .abilities
+                    .first()
+                    .map(|a| a.to_string())
+                    .unwrap_or_default();
+                let nature = move_set
+                    .natures
+                    .first()
+                    .map(|s| s.to_string())
+                    .unwrap_or_default();
+                let evs = move_set
+                    .get_ev_configs()
+                    .split(" | ")
+                    .next()
+                    .map(|s| s.to_string())
+                    .unwrap_or_default();
+                let ivs = move_set
+                    .get_iv_configs()
+                    .split(" | ")
+                    .next()
+                    .map(|s| s.to_string())
+                    .unwrap_or_default();
+                let moves = move_set
+                    .move_slots
+                    .iter()
+                    .map(|moves| {
+                        moves
+                            .iter()
+                            .map(|m| {
+                                if let Some(mt) = m.move_type.as_ref() {
+                                    format!("- {} {}", m.move_name, mt)
+                                } else {
+                                    format!("- {}", m.move_name)
+                                }
+                            })
+                            .next()
+                            .unwrap()
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                let tera_type = move_set
+                    .tera_types
+                    .first()
+                    .map(|s| s.to_string())
+                    .unwrap_or_default();
+
+                let Ok(mut stmt) = conn.prepare(&format!("SELECT main_format, set_format FROM {tbl} where pokemon = \'{pokemon}\'")) else {
+                    sender.send(InitializationMessage::Progress);
+                    continue 'inner;
+                };
+
+                let Ok(mut query_map) = stmt.query_map([], |row| {
+                    Ok((
+                        row.get::<usize, String>(0).unwrap(),
+                        row.get::<usize, String>(1).unwrap(),
+                    ))
+                }) else {
+                    sender.send(InitializationMessage::Progress);
+                    continue 'inner;
+                };
+
+                let stmt_str = match query_map.next() {
+                    Some(Ok((orig_main, orig_set))) => {
+                        if &orig_main == main_format && &orig_set == set_format {
+                            sender.send(InitializationMessage::Progress);
+                            continue 'inner;
+                        }
+                        format!("UPDATE {tbl} (pokemon = ?1, main_format = ?2, set_format = ?3, set_name = ?4, item = ?5, ability = ?6, nature = ?7, evs = ?8, ivs = ?9, moves = ?10, tera_type = ?11, complete = false) where pokemon = {pokemon}")
+                    }
+                    _ => {
+                        format!("INSERT INTO {tbl} (pokemon, main_format, set_format, set_name, item, ability, nature, evs, ivs, moves, tera_type)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)")
+                    }
+                };
+
+                if conn
+                    .execute(
+                        &stmt_str,
+                        (
+                            pokemon,
+                            main_format,
+                            set_format,
+                            set_name,
+                            item,
+                            ability,
+                            nature,
+                            evs,
+                            ivs,
+                            moves,
+                            tera_type,
+                        ),
+                    )
+                    .is_err()
+                {
+                    println!("Error: {}", pokemon);
+                }
+            }
+            sender.send(InitializationMessage::Progress);
         }
         thread::sleep(Duration::from_secs(2));
     }

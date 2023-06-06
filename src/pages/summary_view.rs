@@ -33,10 +33,9 @@ pub fn SummaryView(cx: Scope) -> Element {
                 button {
                     class: "mb-4 h-min w-min py-4 px-6 bg-blue-400",
                     onclick: move |_| {
-                        let path = format!("/{}", format.to_string().to_lowercase());
                         let mut rng = thread_rng();
                         if let Some(&(id, _, _)) = pokemon.read().iter().filter(|(_, _, complete)| !complete).choose(&mut rng) {
-                            dioxus_router::use_router(cx).navigate_to(&format!("/pkm/{id}?path={path}&gen={gen_str}"));
+                            dioxus_router::use_router(cx).navigate_to(&format!("/pkm/{id}?format={format}&gen={gen_str}"));
                         }
                     },
                     "Randomize"
@@ -44,7 +43,7 @@ pub fn SummaryView(cx: Scope) -> Element {
                 div {
                     class: "grid grid-cols-5 gap-6",
                     pokemon.read().iter().map(|(id, pokemon, complete)| {
-                        let url = format!("https://smogon.com/dex/media/sprites/xy/{}.gif", pokemon.replace(' ', "-").replace('.', "").replace('\'', "").to_lowercase());
+                        let url = format!("https://smogon.com/dex/media/sprites/xy/{}.gif", pokemon.replace(' ', "-").replace(['.', '\''], "").to_lowercase());
                         let form = format_str.clone();
                         let color = if *complete {
                             "bg-green-300"

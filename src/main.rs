@@ -39,7 +39,7 @@ fn load_icon() -> Icon {
 }
 
 fn app(cx: Scope) -> Element {
-    use_shared_state_provider(cx, || initialize_db());
+    use_shared_state_provider(cx, initialize_db);
 
     cx.render(rsx! {
         style { include_str!("../output.css") }
