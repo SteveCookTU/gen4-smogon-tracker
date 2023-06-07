@@ -299,7 +299,7 @@ pub async fn update_db_data(
                             sender.send(InitializationMessage::Progress);
                             continue 'inner;
                         }
-                        format!("UPDATE {tbl} (pokemon = ?1, main_format = ?2, set_format = ?3, set_name = ?4, item = ?5, ability = ?6, nature = ?7, evs = ?8, ivs = ?9, moves = ?10, tera_type = ?11, complete = false) where pokemon = {pokemon}")
+                        format!("UPDATE {tbl} SET pokemon = ?1, main_format = ?2, set_format = ?3, set_name = ?4, item = ?5, ability = ?6, nature = ?7, evs = ?8, ivs = ?9, moves = ?10, tera_type = ?11, complete = false where pokemon = {pokemon}")
                     }
                     _ => {
                         format!("INSERT INTO {tbl} (pokemon, main_format, set_format, set_name, item, ability, nature, evs, ivs, moves, tera_type)
